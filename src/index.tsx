@@ -71,6 +71,7 @@ const startSession = callable<[], any>("start_session");
 const stopSession = callable<[], any>("stop_session");
 const getAdvPages = callable<[], AdvInfo>("get_adv_pages");
 const previewCommand = callable<[page: string, params: any], any>("preview_command");
+const savePageParams = callable<[page: string, params: any], any>("save_page_params");
 const runAdvanced = callable<[page: string, params: any, dry: boolean], any>("run_advanced");
 const enqueueAdvanced = callable<[page: string, params: any], any>("enqueue_advanced");
 const getQueue = callable<[], any>("get_queue");
@@ -235,6 +236,8 @@ function Content() {
   const cfgRef = useRef<Record<string, any> | null>(null);
   const runningRef = useRef(false);
   const liveRef = useRef<HTMLPreElement | null>(null);
+  const pageParamsRef = useRef<Record<string, any>>({});
+  const paramSaveTimer = useRef<any>(null);
   const [st, setSt] = useState<MaaStatus | null>(null);
   const [tasks, setTasks] = useState<TaskList | null>(null);
   const [cmd, setCmd] = useState<string>("");
@@ -284,6 +287,7 @@ function Content() {
     try {
       const a = await getAdvPages();
       setAdv(a);
+      pageParamsRef.current = a.params || {};
       setPageParams(a.params || {});
       setQueue(a.queue || []);
       setHistory(a.history || []);
@@ -467,11 +471,15 @@ function Content() {
     return pp[key] !== undefined ? pp[key] : undefined;
   };
   const setParam = (key: string, value: any) => {
-    setPageParams((prev) => {
-      const next = Object.assign({}, prev);
-      next[page] = Object.assign({}, next[page] || {}, { [key]: value });
-      return next;
-    });
+    const pp = pageParamsRef.current || {};
+    const nextPage = Object.assign({}, pp[page] || {}, { [key]: value });
+    const next = Object.assign({}, pp, { [page]: nextPage });
+    pageParamsRef.current = next;
+    setPageParams(next);
+    if (paramSaveTimer.current) clearTimeout(paramSaveTimer.current);
+    paramSaveTimer.current = setTimeout(() => {
+      savePageParams(page, nextPage).catch(() => {});
+    }, 800);
   };
   const currentParams = () => {
     const out: Record<string, any> = {};

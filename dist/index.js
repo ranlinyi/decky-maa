@@ -129,6 +129,7 @@ const startSession = callable("start_session");
 const stopSession = callable("stop_session");
 const getAdvPages = callable("get_adv_pages");
 const previewCommand = callable("preview_command");
+const savePageParams = callable("save_page_params");
 const runAdvanced = callable("run_advanced");
 const enqueueAdvanced = callable("enqueue_advanced");
 const getQueue = callable("get_queue");
@@ -229,6 +230,8 @@ function Content() {
     const cfgRef = SP_REACT.useRef(null);
     const runningRef = SP_REACT.useRef(false);
     const liveRef = SP_REACT.useRef(null);
+    const pageParamsRef = SP_REACT.useRef({});
+    const paramSaveTimer = SP_REACT.useRef(null);
     const [st, setSt] = SP_REACT.useState(null);
     const [tasks, setTasks] = SP_REACT.useState(null);
     const [cmd, setCmd] = SP_REACT.useState("");
@@ -287,6 +290,7 @@ function Content() {
         try {
             const a = await getAdvPages();
             setAdv(a);
+            pageParamsRef.current = a.params || {};
             setPageParams(a.params || {});
             setQueue(a.queue || []);
             setHistory(a.history || []);
@@ -457,11 +461,16 @@ function Content() {
         return pp[key] !== undefined ? pp[key] : undefined;
     };
     const setParam = (key, value) => {
-        setPageParams((prev) => {
-            const next = Object.assign({}, prev);
-            next[page] = Object.assign({}, next[page] || {}, { [key]: value });
-            return next;
-        });
+        const pp = pageParamsRef.current || {};
+        const nextPage = Object.assign({}, pp[page] || {}, { [key]: value });
+        const next = Object.assign({}, pp, { [page]: nextPage });
+        pageParamsRef.current = next;
+        setPageParams(next);
+        if (paramSaveTimer.current)
+            clearTimeout(paramSaveTimer.current);
+        paramSaveTimer.current = setTimeout(() => {
+            savePageParams(page, nextPage).catch(() => { });
+        }, 800);
     };
     const currentParams = () => {
         const out = {};

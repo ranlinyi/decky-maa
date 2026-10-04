@@ -496,11 +496,19 @@ def _cli_argv(page_key, p):
     return []
 
 
+def _page_defaults(page_key):
+    page = next((x for x in ADV_PAGES if x["key"] == page_key), None)
+    if page is None:
+        return {}
+    return {f["key"]: f.get("default") for f in page["fields"]}
+
+
 def _build_command(cfg, page_key, params, force_dry=False):
     page = next((x for x in ADV_PAGES if x["key"] == page_key), None)
     if page is None:
         return {"ok": False, "error": "未知页面: %s" % page_key}
-    p = dict(params or {})
+    p = _page_defaults(page_key)
+    p.update(params or {})
     globals_ = _global_opts(cfg)
     out = {"ok": True, "page": page_key, "title": page["title"],
            "payload": None, "task_file": "", "label": page["title"], "argv": []}
@@ -510,7 +518,9 @@ def _build_command(cfg, page_key, params, force_dry=False):
             tasks = []
             for sub in ("startup", "recruit", "infrast", "fight", "mall", "award", "closedown"):
                 if p.get(sub):
-                    entry = _task_entry(sub, dict(saved.get(sub) or {}))
+                    sp = _page_defaults(sub)
+                    sp.update(dict(saved.get(sub) or {}))
+                    entry = _task_entry(sub, sp)
                     if entry:
                         tasks.append(entry)
             payload = {"tasks": tasks}
@@ -1237,6 +1247,13 @@ class Plugin:
             return {"pages": ADV_PAGES, "params": cfg.get("adv_pages") or {},
                     "queue": [x["label"] for x in self._queue],
                     "history": list(self._hist[:12])}
+        return await asyncio.to_thread(work)
+
+    async def save_page_params(self, page, params=None):
+        def work():
+            cfg = _load_config()
+            self._save_page_params(cfg, page, params or {})
+            return {"ok": True}
         return await asyncio.to_thread(work)
 
     async def preview_command(self, page, params=None):
