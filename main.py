@@ -818,6 +818,20 @@ def _write_resolution_file(width, height):
     return {"ok": True, "path": str(WAYDROID_RES_FILE)}
 
 
+def _sync_resolution_file():
+    """Keep the Game Mode launcher resolution in sync with the Android cfg.
+
+    Called on load so the cage output always follows the persisted Android
+    resolution, even if the cfg was changed outside the plugin."""
+    try:
+        w = int(_read_cfg_prop("persist.waydroid.width"))
+        h = int(_read_cfg_prop("persist.waydroid.height"))
+    except Exception:
+        return
+    if (w, h) in WAYDROID_RESOLUTIONS:
+        _write_resolution_file(w, h)
+
+
 def _restart_waydroid_container():
     """Queue a container restart without waiting for the whole Android boot.
 
@@ -1490,6 +1504,7 @@ class Plugin:
                 if isinstance(data, list):
                     self._hist = data[:30]
             _write_profile(_load_config())
+            _sync_resolution_file()
         except Exception as e:
             decky.logger.error("MaaDeck: init failed: %s" % e)
         self._start_watchdog()
