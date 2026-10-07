@@ -819,8 +819,12 @@ def _write_resolution_file(width, height):
 
 
 def _restart_waydroid_container():
-    rc, out, err = _run(["/usr/bin/systemctl", "restart", WAYDROID_CONTAINER_UNIT],
-                        timeout=120)
+    """Queue a container restart without waiting for the whole Android boot.
+
+    --no-block returns as soon as the systemd job is enqueued, so the QAM call
+    never blocks for ~30s while the container comes back up."""
+    rc, out, err = _run(["/usr/bin/systemctl", "restart", "--no-block",
+                         WAYDROID_CONTAINER_UNIT], timeout=20)
     return {"ok": rc == 0, "rc": rc, "out": out, "err": err}
 
 
@@ -1017,8 +1021,8 @@ class Plugin:
             r["resolution_file"] = f.get("path", "")
             r["restarted"] = bool(s.get("ok"))
             if s.get("ok"):
-                r["note"] = ("已切换为 %d×%d（安卓 + 窗口输出，均已持久）并重启 Waydroid。"
-                             "请重新打开游戏模式里的 Waydroid 条目。" % (w, h))
+                r["note"] = ("已切换为 %d×%d（安卓 + 窗口输出，均已持久）并已下发重启 Waydroid。"
+                             "请稍候重新打开游戏模式里的 Waydroid 条目。" % (w, h))
             else:
                 r["restart_error"] = s.get("err") or ("rc=%s" % s.get("rc"))
                 r["note"] = ("已切换为 %d×%d 并持久保存，但重启 Waydroid 失败：%s。"
