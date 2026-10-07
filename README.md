@@ -12,6 +12,8 @@ Steam Deck 游戏模式（Decky QAM）里的 MAA 控制面板。插件本身是*
     ├── src/index.tsx        # 前端 QAM 面板（构建为 dist/index.js）
     ├── dist/index.js        # 前端 bundle（API_VERSION=2，对应 Decky v3.2.9）
     ├── bin/                 # maa-cli 与 adb（由 scripts/fetch-tools.sh 生成，不入库）
+    ├── resources/
+    │   └── waydroid-gamemode.sh  # 配套的 home-manager 启动脚本（分辨率统一开关依赖它）
     └── scripts/
         ├── fetch-tools.sh   # 下载 maa-cli + platform-tools adb 到 bin/
         └── deploy.sh        # 打包并部署到 Deck（需要 sudo）
@@ -56,6 +58,21 @@ QAM 面板靠前位置有一个「Waydroid 安卓分辨率」开关，可在
 - 切换后插件执行 `systemctl restart waydroid-container.service`。Android 会重新启动，
   当前 Waydroid 窗口也会关闭；**完成后请重新打开游戏模式里的 Waydroid 条目**。
 - MAA 运行中该开关会禁用，避免识别过程中改变分辨率。
+
+### 安装/更新配套启动脚本
+
+`resources/waydroid-gamemode.sh` 是 Deck 上由 home-manager 管理的 `~/.local/bin/waydroid-gamemode`
+的源文件。上面这套统一开关依赖它读取 `~/.local/share/waydroid/gamemode-resolution`，
+并在 Android 起来后执行 `waydroid prop set`。在 Deck 上更新：
+
+~~~bash
+# 源文件通常来自 home-manager 配置仓库（例如 Labaman/SteamOS-Waydroid-Nix-Installer 的 clone）
+cp resources/waydroid-gamemode.sh ~/.config/home-manager/scripts/waydroid-gamemode.sh
+# 应用（需把 ~/.nix-profile/bin 与 /nix/var/nix/profiles/default/bin 加进 PATH）
+home-manager switch --flake ~/.config/home-manager
+~~~
+
+> 该脚本不属于插件运行时，插件不会自动安装它；`scripts/deploy.sh` 也不打包 `resources/`。
 
 ## 开发
 
