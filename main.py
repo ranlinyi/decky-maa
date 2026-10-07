@@ -818,6 +818,15 @@ def _write_resolution_file(width, height):
     return {"ok": True, "path": str(WAYDROID_RES_FILE)}
 
 
+def _apply_waydroid_prop(key, value):
+    """Best-effort live setprop inside the running container."""
+    if not WAYDROID_BIN.exists():
+        return {"ok": False, "err": "未找到 waydroid"}
+    rc, out, err = _run_as_deck(
+        [str(WAYDROID_BIN), "prop", "set", key, str(value)], timeout=25)
+    return {"ok": rc == 0, "rc": rc, "out": out, "err": err}
+
+
 def _sync_resolution_file():
     """Keep the Game Mode launcher resolution in sync with the Android cfg.
 
@@ -878,6 +887,7 @@ class Plugin:
         self._watchdog = None
         self._watchdog_stop = False
         self._procs = []
+        self._res_gen = 0
 
     # -- internals ---------------------------------------------------------
     def _alive(self):
@@ -1029,21 +1039,69 @@ class Plugin:
             f = _write_resolution_file(w, h)
             if not f.get("ok"):
                 return f
+            # Android persists persist.* properties itself and that stored value
+            # outlives the vendor prop, so a bare container restart is not enough:
+            # also set the live property (changes the running display and persists
+            # the new value for the next boot).
+            live_err = []
+            for key, val in (("persist.waydroid.width", str(w)),
+                             ("persist.waydroid.height", str(h))):
+                res = _apply_waydroid_prop(key, val)
+                if not res.get("ok"):
+                    live_err.append(key + "：" + (res.get("err") or "失败"))
+            if not live_err:
+                time.sleep(1)   # let the persistent write land before the restart
             s = _restart_waydroid_container()
+            self._res_gen += 1
+            threading.Thread(target=self._enforce_resolution_props,
+                             args=(self._res_gen, w, h), daemon=True).start()
             r["width"] = w
             r["height"] = h
             r["resolution_file"] = f.get("path", "")
+            r["live_applied"] = not live_err
+            r["live_errors"] = live_err
             r["restarted"] = bool(s.get("ok"))
-            if s.get("ok"):
-                r["note"] = ("已切换为 %d×%d（安卓 + 窗口输出，均已持久）并已下发重启 Waydroid。"
+            if not s.get("ok"):
+                r["restart_error"] = s.get("err") or ("rc=%s" % s.get("rc"))
+            if live_err:
+                r["note"] = ("已写入 %d×%d 配置（安卓当前未运行，稍后会自动应用）；"
+                             "并已下发重启 Waydroid。请重新打开 Waydroid 条目。"
+                             % (w, h))
+            elif s.get("ok"):
+                r["note"] = ("已切换为 %d×%d（安卓 + 窗口输出）并已下发重启 Waydroid。"
                              "请稍候重新打开游戏模式里的 Waydroid 条目。" % (w, h))
             else:
-                r["restart_error"] = s.get("err") or ("rc=%s" % s.get("rc"))
-                r["note"] = ("已切换为 %d×%d 并持久保存，但重启 Waydroid 失败：%s。"
+                r["note"] = ("已切换为 %d×%d 但重启 Waydroid 失败：%s。"
                              "请手动重启 Waydroid 或设备后生效。"
                              % (w, h, r["restart_error"]))
             return r
         return await asyncio.to_thread(work)
+
+    def _enforce_resolution_props(self, gen, w, h):
+        """Re-apply the resolution once a session/container is available again.
+
+        Covers the case where Waydroid was not running when the switch was made,
+        so the live setprop failed and the stale persisted value would otherwise
+        win on the next boot."""
+        keys = (("persist.waydroid.width", str(w)),
+                ("persist.waydroid.height", str(h)))
+        deadline = time.time() + 1800
+        while gen == self._res_gen and time.time() < deadline:
+            try:
+                sess = (_waydroid_status(_load_config()).get("session") or "").lower()
+            except Exception:
+                sess = ""
+            if sess == "running":
+                ok = True
+                for key, val in keys:
+                    if not _apply_waydroid_prop(key, val).get("ok"):
+                        ok = False
+                        break
+                if ok:
+                    decky.logger.info(
+                        "MaaDeck: enforced waydroid resolution %dx%d" % (w, h))
+                    return
+            time.sleep(10)
 
     async def list_tasks(self):
         def work():

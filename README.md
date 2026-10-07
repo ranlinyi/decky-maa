@@ -48,6 +48,11 @@ QAM 面板靠前位置有一个「Waydroid 安卓分辨率」开关，可在
 - 启动脚本取值优先级：`gamemode-resolution` 文件 > `WAYDROID_RES`（Steam 启动项）
   > 默认 `1280x800`。文件一旦写入，插件即成为分辨率来源；Steam 启动项里的
   `WAYDROID_RES` 可以保留，也可以删掉。
+- **Android 侧的对齐**：切换时插件会直接对运行中的容器执行
+  `waydroid prop set persist.waydroid.width/height`（这是真正改变当前显示、并写入 Android
+  自身持久化属性的方式），再重启容器；`waydroid-gamemode` 启动脚本也会在 Android 起来后
+  用同一 `RES` 值再执行一次 `prop set`。因此即使 Android 里残留旧的持久化值与 cfg 不一致，
+  也会在每次启动时被强制对齐。
 - 切换后插件执行 `systemctl restart waydroid-container.service`。Android 会重新启动，
   当前 Waydroid 窗口也会关闭；**完成后请重新打开游戏模式里的 Waydroid 条目**。
 - MAA 运行中该开关会禁用，避免识别过程中改变分辨率。
