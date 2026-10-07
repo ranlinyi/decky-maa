@@ -33,19 +33,23 @@ Steam Deck 游戏模式（Decky QAM）里的 MAA 控制面板。插件本身是*
   由 root 去启动会话容易产生 root 会话。日常用法是先在游戏模式打开 Waydroid
   条目（它按 deck 用户启动会话），再在 QAM 点「启动 MAA」。
 
-## 安卓分辨率切换（1280×800 / 1280×720）
+## 分辨率切换（1280×800 / 1280×720，统一）
 
 QAM 面板靠前位置有一个「Waydroid 安卓分辨率」开关，可在
 **1280×800（原生 16:10）** 与 **1280×720（16:9，较省性能）** 之间手动切换。
+一次切换会同时修改**安卓内部渲染分辨率**和**游戏模式窗口的 cage 输出分辨率**，
+然后**自动重启 Waydroid 容器**，使两者一致生效。
 
-- 切换时后端把 `persist.waydroid.width/height` 写进
-  `/var/lib/waydroid/waydroid.cfg` 的 `[properties]` 段（root 插件直接写），
-  因此**跨重启持久**；首次改动会在同目录留一份 `waydroid.cfg.maadeck.bak` 作为回退副本。
-- 同时尽力对运行中的容器执行 `waydroid prop set` 即时生效；但 Android 的显示分辨率
-  由容器启动时读取，**通常要重启 Waydroid 才能生效**（关闭并重新打开游戏模式里的 Waydroid
-  条目；若仍未变化，重启容器或设备；插件写入的配置已持久，重启后一定按所选值启动）。
-- 该开关只改 Android 内部渲染分辨率；游戏模式窗口的显示分辨率由 Steam 启动项里的
-  `WAYDROID_RES`（默认 1280x800）与 cage 输出决定，两者相互独立。
+- 写入两处配置，均持久：
+  - `/var/lib/waydroid/waydroid.cfg` 的 `[properties]` 段（`persist.waydroid.width/height`），
+    Android 容器启动时读取；首次改动留 `waydroid.cfg.maadeck.bak` 回退副本。
+  - `~/.local/share/waydroid/gamemode-resolution`（内容形如 `1280x720`），由
+    `waydroid-gamemode` 启动脚本读取并用于 `wlr-randr --custom-mode`。
+- 启动脚本取值优先级：`gamemode-resolution` 文件 > `WAYDROID_RES`（Steam 启动项）
+  > 默认 `1280x800`。文件一旦写入，插件即成为分辨率来源；Steam 启动项里的
+  `WAYDROID_RES` 可以保留，也可以删掉。
+- 切换后插件执行 `systemctl restart waydroid-container.service`。Android 会重新启动，
+  当前 Waydroid 窗口也会关闭；**完成后请重新打开游戏模式里的 Waydroid 条目**。
 - MAA 运行中该开关会禁用，避免识别过程中改变分辨率。
 
 ## 开发

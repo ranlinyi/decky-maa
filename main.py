@@ -58,6 +58,8 @@ MAA_BIN = PLUGIN_DIR / "bin" / "maa"
 ADB_BIN = PLUGIN_DIR / "bin" / "adb"
 WAYDROID_BIN = Path(NIX_BIN) / "waydroid"
 WAYDROID_CFG = Path("/var/lib/waydroid/waydroid.cfg")
+WAYDROID_RES_FILE = Path(DECK_HOME) / ".local" / "share" / "waydroid" / "gamemode-resolution"
+WAYDROID_CONTAINER_UNIT = "waydroid-container.service"
 WAYDROID_RESOLUTIONS = [(1280, 800), (1280, 720)]
 
 # Everything maa-related lives on the home partition (root fs has ~1 GB left).
@@ -794,12 +796,31 @@ def _write_cfg_props(updates):
     return {"ok": True, "backup": backup}
 
 
-def _apply_waydroid_prop(key, value):
-    """Best-effort live setprop inside the running container."""
-    if not WAYDROID_BIN.exists():
-        return {"ok": False, "err": "未找到 waydroid"}
-    rc, out, err = _run_as_deck(
-        [str(WAYDROID_BIN), "prop", "set", key, str(value)], timeout=20)
+def _write_resolution_file(width, height):
+    """Write the resolution the Game Mode launcher reads for the cage output.
+
+    The deck-owned launcher reads this file when present and falls back to
+    WAYDROID_RES/default otherwise, so the Android surface and the cage output
+    stay in sync."""
+    tmp = WAYDROID_RES_FILE.with_name(WAYDROID_RES_FILE.name + ".tmp")
+    try:
+        WAYDROID_RES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_text("%dx%d\n" % (width, height))
+        os.chmod(str(tmp), 0o644)
+        os.replace(str(tmp), str(WAYDROID_RES_FILE))
+    except Exception as e:
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except Exception:
+            pass
+        return {"ok": False, "error": "写入显示器分辨率文件失败：%s" % e}
+    return {"ok": True, "path": str(WAYDROID_RES_FILE)}
+
+
+def _restart_waydroid_container():
+    rc, out, err = _run(["/usr/bin/systemctl", "restart", WAYDROID_CONTAINER_UNIT],
+                        timeout=120)
     return {"ok": rc == 0, "rc": rc, "out": out, "err": err}
 
 
@@ -987,19 +1008,22 @@ class Plugin:
                                   "persist.waydroid.height": h})
             if not r.get("ok"):
                 return r
-            live_err = []
-            for key, val in (("persist.waydroid.width", w),
-                             ("persist.waydroid.height", h)):
-                res = _apply_waydroid_prop(key, val)
-                if not res.get("ok"):
-                    live_err.append(key + "：" + (res.get("err") or "失败"))
+            f = _write_resolution_file(w, h)
+            if not f.get("ok"):
+                return f
+            s = _restart_waydroid_container()
             r["width"] = w
             r["height"] = h
-            r["live_applied"] = not live_err
-            r["live_errors"] = live_err
-            r["note"] = ("已写入 %d×%d（持久）。重启 Waydroid 会话后生效。" % (w, h))
-            if live_err:
-                r["note"] += " 当前会话即时生效失败：" + "；".join(live_err)
+            r["resolution_file"] = f.get("path", "")
+            r["restarted"] = bool(s.get("ok"))
+            if s.get("ok"):
+                r["note"] = ("已切换为 %d×%d（安卓 + 窗口输出，均已持久）并重启 Waydroid。"
+                             "请重新打开游戏模式里的 Waydroid 条目。" % (w, h))
+            else:
+                r["restart_error"] = s.get("err") or ("rc=%s" % s.get("rc"))
+                r["note"] = ("已切换为 %d×%d 并持久保存，但重启 Waydroid 失败：%s。"
+                             "请手动重启 Waydroid 或设备后生效。"
+                             % (w, h, r["restart_error"]))
             return r
         return await asyncio.to_thread(work)
 

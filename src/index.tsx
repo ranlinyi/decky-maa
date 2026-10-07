@@ -468,7 +468,7 @@ function Content() {
   const resCur = st && st.waydroid.width && st.waydroid.height ? st.waydroid.width + "x" + st.waydroid.height : "";
   const applyResolution = (v: string) => {
     const parts = String(v).split("x");
-    run(() => setResolution(Number(parts[0]), Number(parts[1])), "分辨率已切换，重启 Waydroid 会话后生效");
+    run(() => setResolution(Number(parts[0]), Number(parts[1])), "已切换分辨率并重启 Waydroid，请重新打开 Waydroid 条目");
   };
   const resolutionSection = (
     <PanelSection title="Waydroid 安卓分辨率">
@@ -484,7 +484,7 @@ function Content() {
       </PanelSectionRow>
       <PanelSectionRow>
         <div style={{ fontSize: 11, opacity: 0.62, lineHeight: 1.4 }}>
-          当前：{resCur ? resCur.replace("x", " × ") : "读取中"}。切换后写入 Waydroid 配置并持久保存，重启 Waydroid（必要时重启设备）后生效。
+          当前：{resCur ? resCur.replace("x", " × ") : "读取中"}。切换会同时修改安卓内部与游戏模式窗口输出分辨率（持久保存），并自动重启 Waydroid；完成后请重新打开 Waydroid 条目。
         </div>
       </PanelSectionRow>
     </PanelSection>
