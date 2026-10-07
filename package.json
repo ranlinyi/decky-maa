@@ -3,6 +3,18 @@
   "version": "0.2.0",
   "description": "MAA (MaaAssistantArknights) control panel for Steam Deck / Waydroid",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ranlinyi/decky-maa.git"
+  },
+  "homepage": "https://github.com/ranlinyi/steamos-waydroid-maa",
+  "keywords": [
+    "steam-deck",
+    "decky",
+    "maa",
+    "arknights",
+    "waydroid"
+  ],
   "scripts": {
     "build": "rollup -c",
     "watch": "rollup -c -w"
