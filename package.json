@@ -1,6 +1,6 @@
 {
   "name": "decky-maa",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MAA (MaaAssistantArknights) control panel for Steam Deck / Waydroid",
   "type": "module",
   "scripts": {
