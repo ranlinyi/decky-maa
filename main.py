@@ -57,6 +57,8 @@ JOB_LOG = LOG_DIR / "maa-job.log"
 MAA_BIN = PLUGIN_DIR / "bin" / "maa"
 ADB_BIN = PLUGIN_DIR / "bin" / "adb"
 WAYDROID_BIN = Path(NIX_BIN) / "waydroid"
+WAYDROID_CFG = Path("/var/lib/waydroid/waydroid.cfg")
+WAYDROID_RESOLUTIONS = [(1280, 800), (1280, 720)]
 
 # Everything maa-related lives on the home partition (root fs has ~1 GB left).
 MAA_ROOT = RUNTIME_DIR / "maa"
@@ -716,9 +718,8 @@ def _plugin_version():
 
 
 def _read_cfg_prop(key):
-    p = Path("/var/lib/waydroid/waydroid.cfg")
     try:
-        for line in p.read_text(errors="replace").splitlines():
+        for line in WAYDROID_CFG.read_text(errors="replace").splitlines():
             if "=" in line:
                 k, v = line.split("=", 1)
                 if k.strip() == key:
@@ -726,6 +727,80 @@ def _read_cfg_prop(key):
     except Exception:
         pass
     return ""
+
+
+def _write_cfg_props(updates):
+    """Persistently update keys in the [properties] section of waydroid.cfg.
+
+    waydroid reads this section at container start (helpers/lxc.py ->
+    waydroid_base.prop), so writing it here survives reboots. The first time
+    we touch the file a backup is kept next to it for manual rollback."""
+    try:
+        text = WAYDROID_CFG.read_text()
+    except Exception as e:
+        return {"ok": False,
+                "error": "无法读取 Waydroid 配置 %s：%s" % (WAYDROID_CFG, e)}
+    backup = ""
+    try:
+        bak = WAYDROID_CFG.with_name(WAYDROID_CFG.name + ".maadeck.bak")
+        if not bak.exists():
+            bak.write_text(text)
+        backup = str(bak)
+    except Exception:
+        pass
+    lines = text.splitlines()
+    sec_start = None
+    sec_end = len(lines)
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if s.startswith("[") and s.endswith("]"):
+            if sec_start is not None:
+                sec_end = i
+                break
+            if s[1:-1].strip() == "properties":
+                sec_start = i + 1
+    if sec_start is None:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.append("[properties]")
+        sec_start = len(lines)
+        sec_end = len(lines)
+    for key, value in updates.items():
+        found = False
+        for i in range(sec_start, sec_end):
+            line = lines[i]
+            if "=" in line and line.split("=", 1)[0].strip() == key:
+                lines[i] = key + " = " + str(value)
+                found = True
+                break
+        if not found:
+            lines.insert(sec_end, key + " = " + str(value))
+            sec_end += 1
+    new_text = "\n".join(lines)
+    if not new_text.endswith("\n"):
+        new_text += "\n"
+    tmp = WAYDROID_CFG.with_name(WAYDROID_CFG.name + ".maadeck.tmp")
+    try:
+        tmp.write_text(new_text)
+        os.chmod(str(tmp), 0o644)
+        os.replace(str(tmp), str(WAYDROID_CFG))
+    except Exception as e:
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except Exception:
+            pass
+        return {"ok": False, "error": "写入 Waydroid 配置失败：%s" % e}
+    return {"ok": True, "backup": backup}
+
+
+def _apply_waydroid_prop(key, value):
+    """Best-effort live setprop inside the running container."""
+    if not WAYDROID_BIN.exists():
+        return {"ok": False, "err": "未找到 waydroid"}
+    rc, out, err = _run_as_deck(
+        [str(WAYDROID_BIN), "prop", "set", key, str(value)], timeout=20)
+    return {"ok": rc == 0, "rc": rc, "out": out, "err": err}
 
 
 def _waydroid_container():
@@ -898,6 +973,34 @@ class Plugin:
             _save_config(cfg)
             _write_profile(cfg)
             return cfg
+        return await asyncio.to_thread(work)
+
+    async def set_waydroid_resolution(self, width, height):
+        def work():
+            try:
+                w, h = int(width), int(height)
+            except Exception:
+                return {"ok": False, "error": "无效的分辨率参数"}
+            if (w, h) not in WAYDROID_RESOLUTIONS:
+                return {"ok": False, "error": "仅支持 1280x800 或 1280x720"}
+            r = _write_cfg_props({"persist.waydroid.width": w,
+                                  "persist.waydroid.height": h})
+            if not r.get("ok"):
+                return r
+            live_err = []
+            for key, val in (("persist.waydroid.width", w),
+                             ("persist.waydroid.height", h)):
+                res = _apply_waydroid_prop(key, val)
+                if not res.get("ok"):
+                    live_err.append(key + "：" + (res.get("err") or "失败"))
+            r["width"] = w
+            r["height"] = h
+            r["live_applied"] = not live_err
+            r["live_errors"] = live_err
+            r["note"] = ("已写入 %d×%d（持久）。重启 Waydroid 会话后生效。" % (w, h))
+            if live_err:
+                r["note"] += " 当前会话即时生效失败：" + "；".join(live_err)
+            return r
         return await asyncio.to_thread(work)
 
     async def list_tasks(self):

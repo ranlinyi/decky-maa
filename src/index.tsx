@@ -69,6 +69,7 @@ const connectAdb = callable<[], any>("connect_adb");
 const disconnectAdb = callable<[], any>("disconnect_adb");
 const startSession = callable<[], any>("start_session");
 const stopSession = callable<[], any>("stop_session");
+const setResolution = callable<[w: number, h: number], any>("set_waydroid_resolution");
 const getAdvPages = callable<[], AdvInfo>("get_adv_pages");
 const previewCommand = callable<[page: string, params: any], any>("preview_command");
 const savePageParams = callable<[page: string, params: any], any>("save_page_params");
@@ -86,6 +87,10 @@ const VERBOSE_OPTS = [
   { data: 0, label: "默认" },
   { data: 1, label: "-v（详细）" },
   { data: 2, label: "-v -v（更详细）" },
+];
+const RES_OPTIONS = [
+  { data: "1280x800", label: "1280 × 800（原生 16:10）" },
+  { data: "1280x720", label: "1280 × 720（16:9，较省性能）" },
 ];
 const GREEN = "#3ba55d";
 const BLUE = "#4a9eff";
@@ -460,6 +465,30 @@ function Content() {
   const wdColor = !st ? GREY : (st.waydroid.session || "").indexOf("running") >= 0 ? GREEN : GREY;
   const coreText = !st ? "-" : !st.maa.installed ? "缺少 maa-cli" : st.maa.core_installed ? (st.maa.core_version || "已安装") : "未安装核心";
   const wdRes = st && st.waydroid.width ? st.waydroid.width + " x " + st.waydroid.height : "-";
+  const resCur = st && st.waydroid.width && st.waydroid.height ? st.waydroid.width + "x" + st.waydroid.height : "";
+  const applyResolution = (v: string) => {
+    const parts = String(v).split("x");
+    run(() => setResolution(Number(parts[0]), Number(parts[1])), "分辨率已切换，重启 Waydroid 会话后生效");
+  };
+  const resolutionSection = (
+    <PanelSection title="Waydroid 安卓分辨率">
+      <PanelSectionRow>
+        <DropdownItem
+          label="安卓分辨率"
+          menuLabel="选择安卓分辨率"
+          disabled={busy || !!(st && (st.running || st.job))}
+          rgOptions={RES_OPTIONS}
+          selectedOption={resCur || "1280x800"}
+          onChange={(o: any) => applyResolution(String(pickVal(o)))}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <div style={{ fontSize: 11, opacity: 0.62, lineHeight: 1.4 }}>
+          当前：{resCur ? resCur.replace("x", " × ") : "读取中"}。切换后写入 Waydroid 配置并持久保存；需重启 Waydroid 会话（重新进入 Waydroid 条目）后生效。
+        </div>
+      </PanelSectionRow>
+    </PanelSection>
+  );
 
   const presetOpts = tasks ? tasks.predefined.map((p) => ({ data: p.id, label: p.label })) : [];
   const customOpts = tasks ? tasks.custom.map((c) => ({ data: "run " + c, label: c })) : [];
@@ -591,6 +620,7 @@ function Content() {
     return (
       <>
         {modeToggle}
+        {resolutionSection}
         {statusSection}
         {coreSection}
         {taskControl}
@@ -610,6 +640,7 @@ function Content() {
         </ButtonItem>
       </PanelSectionRow>
 
+      {resolutionSection}
       {statusSection}
 
       <PanelSection title="设备与连接">

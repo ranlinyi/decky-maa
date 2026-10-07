@@ -33,6 +33,20 @@ Steam Deck 游戏模式（Decky QAM）里的 MAA 控制面板。插件本身是*
   由 root 去启动会话容易产生 root 会话。日常用法是先在游戏模式打开 Waydroid
   条目（它按 deck 用户启动会话），再在 QAM 点「启动 MAA」。
 
+## 安卓分辨率切换（1280×800 / 1280×720）
+
+QAM 面板靠前位置有一个「Waydroid 安卓分辨率」开关，可在
+**1280×800（原生 16:10）** 与 **1280×720（16:9，较省性能）** 之间手动切换。
+
+- 切换时后端把 `persist.waydroid.width/height` 写进
+  `/var/lib/waydroid/waydroid.cfg` 的 `[properties]` 段（root 插件直接写），
+  因此**跨重启持久**；首次改动会在同目录留一份 `waydroid.cfg.maadeck.bak` 作为回退副本。
+- 同时尽力对运行中的容器执行 `waydroid prop set` 即时生效；但 Android 的显示分辨率
+  由容器启动时读取，**要真正生效需重启 Waydroid 会话**（关闭并重新进入游戏模式里的 Waydroid 条目）。
+- 该开关只改 Android 内部渲染分辨率；游戏模式窗口的显示分辨率由 Steam 启动项里的
+  `WAYDROID_RES`（默认 1280x800）与 cage 输出决定，两者相互独立。
+- MAA 运行中该开关会禁用，避免识别过程中改变分辨率。
+
 ## 开发
 
     cd decky-maa
