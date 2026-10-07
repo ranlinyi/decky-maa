@@ -42,7 +42,8 @@ QAM 面板靠前位置有一个「Waydroid 安卓分辨率」开关，可在
   `/var/lib/waydroid/waydroid.cfg` 的 `[properties]` 段（root 插件直接写），
   因此**跨重启持久**；首次改动会在同目录留一份 `waydroid.cfg.maadeck.bak` 作为回退副本。
 - 同时尽力对运行中的容器执行 `waydroid prop set` 即时生效；但 Android 的显示分辨率
-  由容器启动时读取，**要真正生效需重启 Waydroid 会话**（关闭并重新进入游戏模式里的 Waydroid 条目）。
+  由容器启动时读取，**通常要重启 Waydroid 才能生效**（关闭并重新打开游戏模式里的 Waydroid
+  条目；若仍未变化，重启容器或设备；插件写入的配置已持久，重启后一定按所选值启动）。
 - 该开关只改 Android 内部渲染分辨率；游戏模式窗口的显示分辨率由 Steam 启动项里的
   `WAYDROID_RES`（默认 1280x800）与 cage 输出决定，两者相互独立。
 - MAA 运行中该开关会禁用，避免识别过程中改变分辨率。

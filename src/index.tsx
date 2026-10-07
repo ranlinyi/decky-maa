@@ -484,7 +484,7 @@ function Content() {
       </PanelSectionRow>
       <PanelSectionRow>
         <div style={{ fontSize: 11, opacity: 0.62, lineHeight: 1.4 }}>
-          当前：{resCur ? resCur.replace("x", " × ") : "读取中"}。切换后写入 Waydroid 配置并持久保存；需重启 Waydroid 会话（重新进入 Waydroid 条目）后生效。
+          当前：{resCur ? resCur.replace("x", " × ") : "读取中"}。切换后写入 Waydroid 配置并持久保存，重启 Waydroid（必要时重启设备）后生效。
         </div>
       </PanelSectionRow>
     </PanelSection>
